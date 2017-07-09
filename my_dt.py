@@ -40,9 +40,9 @@ class Node(object):
 	def __init__(self, \
 					category_name='', \
 					childs=[], \
-					entropy=0.0,
-					arc = [],
-					isroot = 0):
+					entropy=0.0, \
+					arc = [], \
+					node_id = -1):
 		# Name of category
 		self.category_name = category_name
 		# Children is a list which contains judge or child
@@ -51,89 +51,98 @@ class Node(object):
 		self.entropy = entropy
 		# Attribute value
 		self.arc = arc
-		self.isroot = isroot
+		self.node_id = node_id
 
-def generateTree(train_data, label, \
-				attribute_names, \
-				parent):
-
-	if parent.isroot:
-		# Don't apply any attributes.
-		root_entropy = category_entropy(train_data, label, 0)
-		# Gain == 0 for root
-		if root_entropy < ZERO:
-			parent.category_name = 'Random_Guess'
-			parent.childs.append(label[0])
-			return
-	else:
-		root_entropy = parent.entropy
-		# Gain == 0
-		if root_entropy < ZERO:
-			parent.childs.append(label[0])
-			return 
+def helper(train_data, label, attribute_names, parent):
+	root_entropy = category_entropy(train_data, label, 0)
+	# 100% SURE
+	if root_entropy < ZERO:
+		parent.childs.append(label[0])
+		return
 	sub_entropy = category_entropy(train_data, label, train_data.shape[1])
-	# Gain < 0
-	if (sub_entropy >= root_entropy).all() :
-		if parent.isroot:
-			# Make prediction, just make it.
-			parent.category_name = 'Random_Guess'
-			parent.entropy = root_entropy
-			parent.childs = [np.int(sum(label) > (0.5 * len(label)))] 
-			return
-		else:
-			parent.childs.append(np.int(sum(label) > (0.5 * len(label))))
-			return
-	# Gain > 0
+	# Gain < 0 for all nodes
+	if (sub_entropy > root_entropy).all() :
+		parent.childs.append(np.int(sum(label) > (0.5 * len(label))))
+		return 
+
+	# Gain > 0 for at least one node, find the node with largest gain
 	else:
-		if parent.isroot:
-			node = parent
-			node.isroot = 0
-		else:
-			node = Node()
+		node = Node(node_id=parent.node_id+1)
 		min_entropy_idx = np.argmin(sub_entropy)
-		node.entropy = sub_entropy[min_entropy_idx]
 		node.category_name = attribute_names[min_entropy_idx]
-		cols = range(len(train_data[0]))
+		cols = np.asarray([i for i in range(len(train_data[0]))])
 		feature_col = train_data[:, min_entropy_idx]
 		features = set(feature_col)
 		attribute_names.remove(node.category_name)
 		for ac in features:
 			node.arc.append(ac)
 			sub_train = train_data[:, cols!=min_entropy_idx]
-			sub_train = train_data[feature_col==ac, :]
+			sub_train = sub_train[feature_col==ac, :]
 			sub_label = label[feature_col==ac]
-			# 我宣布你是一个合格的node
-			generateTree(sub_train, sub_label, \
+			helper(sub_train, sub_label, \
 						attribute_names, \
 						node)
-		if not parent.isroot:
-			parent.childs.append(node)
+		print(node.childs)	
+		print(parent.childs)
+		parent.childs.append(node)
 		attribute_names.append(node.category_name)
-	return 
-
-
+		return 
+			
+def generateTree(train_data, label, \
+				attribute_names):
 	
-
+	
+	node = Node(node_id=0)
+	# 100% SURE
+	root_entropy = category_entropy(train_data, label, 0)
+	if root_entropy < ZERO:
+		node.category_name='Random_Guess'
+		node.childs.append(label[0])
+		return node
+	sub_entropy = category_entropy(train_data, label, train_data.shape[1])
+	# Gain < 0 for all nodes
+	if (sub_entropy > root_entropy).all() :
+		# Make prediction, just make it.
+		node.category_name = 'Random_Guess'
+		node.childs = [np.int(sum(label) > (0.5 * len(label)))] 
+		return node
+		
+	# Gain > 0 for at least one node, find the node with largest gain
+	else:
+		min_entropy_idx = np.argmin(sub_entropy)
+		node.category_name = attribute_names[min_entropy_idx]
+		cols = np.asarray([i for i in range(len(train_data[0]))])
+		feature_col = train_data[:, min_entropy_idx]
+		features = set(feature_col)
+		attribute_names.remove(node.category_name)
+		for ac in features:
+			node.arc.append(ac)
+			sub_train = train_data[:, cols!=min_entropy_idx]
+			sub_train = sub_train[feature_col==ac, :]
+			sub_label = label[feature_col==ac]
+			helper(sub_train, sub_label, \
+						attribute_names, \
+						node)
+		attribute_names.append(node.category_name)
+		return node
 
 
 data = np.array([[1,1,1,0], \
-						[1,2,1,0],\
-						[1,2,2,0],\
-						[2,1,1,0],\
-						[2,1,2,0],\
-						[2,2,2,1],\
-						[2,2,1,1],\
-						[3,1,1,1],\
-						[3,2,2,1],\
-						[3,2,1,1]])
+				[1,2,1,0],\
+				[1,2,2,0],\
+				[2,1,1,0],\
+				[2,1,2,0],\
+				[2,2,2,1],\
+				[2,2,1,1],\
+				[3,1,1,1],\
+				[3,2,2,1],\
+				[3,2,1,1]])
 train_data = np.asarray(data[:, :3])
 label = data[:, -1]
 attribute_names=['Age', 'Competition', 'Type']
-# print (category_entropy(train_data, label, 3))
-root = Node()
-root.isroot=1
-generateTree(train_data, label, attribute_names, parent=root)
-print(len(root.childs))
+root = generateTree(train_data, label, attribute_names)
+# print(root.childs)
+
 
 
 
