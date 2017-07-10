@@ -1,6 +1,9 @@
 import pandas as pd
 import numpy as np
-
+import graphviz as gv
+import functools
+graph = functools.partial(gv.Graph, format='svg')
+digraph = functools.partial(gv.Digraph, format='svg')
 ZERO=1e-6
 
 def entropy(P):
@@ -37,40 +40,39 @@ def category_entropy(train_data, label, column_number):
 
 
 class Node(object):
-	def __init__(self, \
-					category_name='', \
-					childs=[], \
-					entropy=0.0, \
-					arc = [], \
-					node_id = -1):
+	def __init__(self):
 		# Name of category
-		self.category_name = category_name
+		self.category_name = ''
 		# Children is a list which contains judge or child
-		self.childs = childs
+		self.childs = []
 		# Entropy of the attribute
-		self.entropy = entropy
+		self.entropy = 0.0
 		# Attribute value
-		self.arc = arc
-		self.node_id = node_id
+		self.arc = []
 
-def helper(train_data, label, attribute_names, parent):
+def gain_le_to_zero(train_data, label, parent):
 	root_entropy = category_entropy(train_data, label, 0)
 	# 100% SURE
 	if root_entropy < ZERO:
 		parent.childs.append(label[0])
-		return
+		return True
 	sub_entropy = category_entropy(train_data, label, train_data.shape[1])
 	# Gain < 0 for all nodes
 	if (sub_entropy > root_entropy).all() :
 		parent.childs.append(np.int(sum(label) > (0.5 * len(label))))
-		return 
+		return True
+	return False
 
-	# Gain > 0 for at least one node, find the node with largest gain
-	else:
-		node = Node(node_id=parent.node_id+1)
+
+def helper(train_data, label, attribute_names, parent):
+	if not gain_le_to_zero(train_data, label, parent):
+		# Gain > 0 for at least one node, find the node with largest gain
+		sub_entropy = category_entropy(train_data, label, train_data.shape[1])
+		node = Node()
+		parent.childs.append(node)
 		min_entropy_idx = np.argmin(sub_entropy)
 		node.category_name = attribute_names[min_entropy_idx]
-		cols = np.asarray([i for i in range(len(train_data[0]))])
+		cols = range(len(train_data[0]))
 		feature_col = train_data[:, min_entropy_idx]
 		features = set(feature_col)
 		attribute_names.remove(node.category_name)
@@ -80,35 +82,20 @@ def helper(train_data, label, attribute_names, parent):
 			sub_train = sub_train[feature_col==ac, :]
 			sub_label = label[feature_col==ac]
 			helper(sub_train, sub_label, \
-						attribute_names, \
-						node)
-		print(node.childs)	
-		print(parent.childs)
-		parent.childs.append(node)
+					attribute_names, \
+					node)
 		attribute_names.append(node.category_name)
-		return 
+		return
+
 			
 def generateTree(train_data, label, \
 				attribute_names):
 	
 	
-	node = Node(node_id=0)
-	# 100% SURE
-	root_entropy = category_entropy(train_data, label, 0)
-	if root_entropy < ZERO:
-		node.category_name='Random_Guess'
-		node.childs.append(label[0])
-		return node
-	sub_entropy = category_entropy(train_data, label, train_data.shape[1])
-	# Gain < 0 for all nodes
-	if (sub_entropy > root_entropy).all() :
-		# Make prediction, just make it.
-		node.category_name = 'Random_Guess'
-		node.childs = [np.int(sum(label) > (0.5 * len(label)))] 
-		return node
-		
-	# Gain > 0 for at least one node, find the node with largest gain
-	else:
+	node = Node()
+	node.category_name='Root'
+	if not gain_le_to_zero(train_data, label, node):
+		sub_entropy = category_entropy(train_data, label, train_data.shape[1])
 		min_entropy_idx = np.argmin(sub_entropy)
 		node.category_name = attribute_names[min_entropy_idx]
 		cols = np.asarray([i for i in range(len(train_data[0]))])
@@ -125,6 +112,43 @@ def generateTree(train_data, label, \
 						node)
 		attribute_names.append(node.category_name)
 		return node
+
+# From http://matthiaseisen.com/articles/graphviz/
+def add_nodes(graph, nodes):
+    for n in nodes:
+        if isinstance(n, tuple):
+            graph.node(n[0], **n[1])
+        else:
+            graph.node(n)
+    return graph
+
+def add_edges(graph, edges):
+    for e in edges:
+        if isinstance(e[0], tuple):
+            graph.edge(*e[0], **e[1])
+        else:
+            graph.edge(*e)
+    return graph
+
+def ret_gynode_with_label(node, flag):
+	return str(node)
+
+node_id=0
+def traverse_tree(root, nid):
+	node_index=[]
+	line=''
+	node=[]
+	edge=[]
+	for i, c in enumerate(root.childs):
+		if isinstance(c, Node):
+			node.append(lambda x: (str(node_id), {'label': c.category_name}))
+			node_index.append(i)
+		else:
+			node.append()
+		node_id+=1
+	print(line)
+	for res in node_index:
+		traverse_tree(root.childs[res])
 
 
 data = np.array([[1,1,1,0], \
@@ -142,9 +166,7 @@ label = data[:, -1]
 attribute_names=['Age', 'Competition', 'Type']
 root = generateTree(train_data, label, attribute_names)
 # print(root.childs)
-
-
-
+traverse_tree(root)
 
 
 
