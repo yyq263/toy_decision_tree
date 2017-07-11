@@ -130,25 +130,19 @@ def add_edges(graph, edges):
             graph.edge(*e)
     return graph
 
-def ret_gynode_with_label(node, flag):
-	return str(node)
-
-node_id=0
-def traverse_tree(root, nid):
-	node_index=[]
-	line=''
-	node=[]
-	edge=[]
+gvnode=[]
+gvedge=[]
+def traverse_tree(root,node_id):
+	parent_id = node_id[0]
+	gvnode.append((str(parent_id), {'label': root.category_name}))
 	for i, c in enumerate(root.childs):
+		node_id[0]+=1 # reference
+		cid=node_id[0]
 		if isinstance(c, Node):
-			node.append(lambda x: (str(node_id), {'label': c.category_name}))
-			node_index.append(i)
+			traverse_tree(c,node_id)
 		else:
-			node.append()
-		node_id+=1
-	print(line)
-	for res in node_index:
-		traverse_tree(root.childs[res])
+			gvnode.append((str(cid), {'label': str(c)}))
+		gvedge.append(((str(parent_id), str(cid)), {'label': str(root.arc[i])}))
 
 
 data = np.array([[1,1,1,0], \
@@ -166,7 +160,15 @@ label = data[:, -1]
 attribute_names=['Age', 'Competition', 'Type']
 root = generateTree(train_data, label, attribute_names)
 # print(root.childs)
-traverse_tree(root)
+node_id=[0]
+traverse_tree(root, node_id)
+for g in gvnode:
+	print(g)
+for e in gvedge:
+	print(e)
 
-
+add_edges(
+    add_nodes(digraph(), gvnode),
+    gvedge
+).render('img/g5')
 
